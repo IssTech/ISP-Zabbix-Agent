@@ -1,4 +1,4 @@
-ISP-Zabbix-Agent
+# IBM Storage Protect Zabbix Monitoring Agent
 
 Advanced Monitoring for IBM Storage Protect (ISP) / TSM using Zabbix
 
