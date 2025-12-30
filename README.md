@@ -8,15 +8,15 @@ This project provides a robust, Python-based solution to monitor IBM Storage Pro
 
 - **Auto-Discovery**: Automatically finds new Storage Pools and creates items/graphs for them
 - **Secure**: Credentials are stored in a restricted configuration file, not in the script
-- **Efficient**: Fetches multiple metrics (Usage & Capacity) in a single query to reduce dsmadmc overhead
-- **Compatibility**: Works with Python 3.6+ (RHEL/CentOS 7+)
-- **Robust**: Handles dsmadmc timeouts, permission issues, and parsing errors gracefully
+- **Efficient**: Fetches multiple metrics (Usage & Capacity) in a single query to reduce `dsmadmc` overhead
+- **Compatibility**: Works with Python 3.8+ (RHEL/CentOS 9+)
+- **Robust**: Handles `dsmadmc` timeouts, permission issues, and parsing errors gracefully
 
 ## Prerequisites
 
-- **IBM Storage Protect Client**: The dsmadmc executable must be installed on the Zabbix Server or Proxy
-- **ISP Admin User**: A read-only administrator account on your ISP server (e.g., zabbixmon)
-- **Python 3**: Version 3.6 or higher
+- **IBM Storage Protect Client**: The `dsmadmc` executable must be installed on the Zabbix Server or Proxy
+- **ISP Admin User**: A read-only administrator account on your ISP server (e.g., `zabbixmon`)
+- **Python 3**: Version 3.8 or higher
 
 ## Installation
 
@@ -65,32 +65,81 @@ systemctl restart zabbix-server
 
 ## Zabbix Frontend Configuration
 
-### Step 1: Add Host Macros
 
-Add `{$ISP_SERVER}` macro with your TSM server name.
+### Step 1: Create a Template
+Go to `Data Colletion` → `Templates` and create a new Template for IBM Storage Protect monitoring.
+
+- **Template name**: `Template IBM Storage Protect for Storage Pool
+- **Templates Groups**: `Templates/IBM Storage Protect`
+
+Click Add to create the template.
 
 ### Step 2: Create Discovery Rule
+Click on the `Discovery` and create a new Discovery Rule:
 
-- **Name**: ISP Storage Pool Discovery
-- **Type**: External check
+- **Name**: `ISP Storage Pool Discovery`
+- **Type**: `External check`
 - **Key**: `isp_monitor.py["discovery_stgpool","","-s","{$ISP_SERVER}"]`
-- **Update interval**: 1h
+- **Update interval**: `1h`
+- **Timeout**: `30s`
 
 ### Step 3: Item Prototypes
 
 Create a Master Item and Dependent Items to parse JSON data efficiently.
 
 **Master Item**:
+- **Name**: `ISP Storage Pool Stats for {#STGPOOL}`
+- **Type**: `External check`
 - **Key**: `isp_monitor.py["stgpool_stats","{#STGPOOL}","-s","{$ISP_SERVER}"]`
-- **Type**: Text
+- **Type**: `Text`
+- **Update interval**: `10m`
+- **Timeout**: `30s`
+- **History**: `Do not store`
 
 **Dependent Item - Utilization**:
+- **Name**: `ISP Storage Pool Utilization for {#STGPOOL}`
+- **Type**: `Dependent item`
 - **Key**: `isp.stgpool.util[{#STGPOOL}]`
-- **Preprocessing**: JSONPath → `$.pct_utilized`
+- **Type of information**: `Numeric (float)`
+- **Unit**: `%`
+- **Master item**: `ISP Storage Pool Stats for {#STGPOOL}`
+- **Preprocessing**: `JSONPath` → `$.pct_utilized`
 
 **Dependent Item - Capacity**:
+- **Name**: `ISP Storage Pool Capacity for {#STGPOOL}`
+- **Type**: `Dependent item`
 - **Key**: `isp.stgpool.capacity[{#STGPOOL}]`
-- **Preprocessing**: JSONPath → `$.est_capacity_mb`, then multiply by 1048576
+- **Type of information**: `Numeric (unsigned)`
+- **Master item**: `ISP Storage Pool Stats for {#STGPOOL}`
+- **Unit**: `B`
+- **Preprocessing**: `JSONPath` → `$.est_capacity_mb`, 
+- **Preprocessing**: `Customer Multiplier` → `1048576`
+
+
+### Step 4: Create Triggers Prototypes
+Create Trigger Prototypes to alert on high utilization.
+
+**Warning Trigger**:
+- **Name**: `ISP Storage Pool {#STGPOOL} Utilization Warning`
+- **Severity**: `Warning`
+- **Problem Expression**: `last(/Template IBM Storage Protect Storage Pool/isp.stgpool.util[{#STGPOOL}])>80`
+- **OK event generation**: `Recovery expression` 
+- **Recovery Expression**: `last(/Template IBM Storage Protect Storage Pool/isp.stgpool.util[{#STGPOOL}])<75`
+
+**High Trigger**:
+- **Name**: `ISP Storage Pool {#STGPOOL} Utilization High`
+- **Severity**: `High`
+- **Problem Expression**: `last(/Template IBM Storage Protect Storage Pool/isp.stgpool.util[{#STGPOOL}])>90`
+- **OK event generation**: `Recovery expression` 
+- **Recovery Expression**: `last(/Template IBM Storage Protect Storage Pool/isp.stgpool.util[{#STGPOOL}])<85`   
+
+### Step 5: Create Graph Prototypes
+Create Graph Prototypes to visualize Storage Pool metrics.
+
+**Storage Pool Utilization Graph**:
+- **Name**: `ISP Storage Pool {#STGPOOL} Utilization`
+- **Items**:
+  - `ISP Storage Pool Utilization for {#STGPOOL}`
 
 ## Testing
 
